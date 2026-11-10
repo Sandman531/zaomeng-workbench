@@ -1,0 +1,19 @@
+{
+  "name": "造梦工作台",
+  "short_name": "造梦",
+  "description": "造梦先生的个人工作台：今日计划、在谈客户、方案进度、工地动态、问题追踪、抖音排期，一眼看清今天",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f6fc",
+  "theme_color": "#161b22",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

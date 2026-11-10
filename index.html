@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  造梦工作台                                                 ║
+  ║  由 不一书个人工作台生成器 (bys-personal-dashboard) 生成       ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║  改这个文件时请遵守：                                          ║
+  ║  1. 每个功能必须被分区标记包裹，且 START 和 END 的功能名        ║
+  ║     必须一字不差（HTML 和 JS 两处都要）                        ║
+  ║  2. 数据读写只走 Store.*，不要直接碰 localStorage             ║
+  ║  3. 输入框 font-size 不能小于 16px                            ║
+  ║  4. 敏感数据（API key）走 Store.setSecret，不进备份            ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>造梦工作台</title>
+
+<!-- PWA：这四行决定了"添加到主屏幕"之后是不是全屏、图标好不好看 -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="造梦">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161b22">
+<script>
+/* 主题预载：手动选过深/浅色时，在首帧绘制前就把 data-theme 挂上，避免闪一下。
+   偏好同时存在 Store 配置里（见 Settings / Theme），cookie 只是这里的预载缓存。 */
+(function(){
+  try {
+    var m = document.cookie.match(/(?:^|;\s*)bys_theme=(dark|light)/);
+    if (m) document.documentElement.setAttribute('data-theme', m[1]);
+  } catch (e) {}
+})();
+</script>
+
+<style>
+/* ==== 主题变量（双色方案：浅色＝清爽蓝包，深色＝科技暗色包） ====
+   默认跟随系统（prefers-color-scheme）；设置里可手动锁定，
+   手动值由 Theme 模块写到 <html data-theme="dark|light"> 上。 */
+:root{
+  /* 浅色 · 清爽蓝 */
+  --bg:#f0f6fc;
+  --sidebar:#ffffff;
+  --sidebar-text:#4a5568;
+  --sidebar-active:#dbeafe;
+  --card:#ffffff;
+  --text:#1a202c;
+  --text-dim:#718096;
+  --accent:#2b7fff;
+  --radius:14px;
+  --shadow:0 2px 8px rgba(43,127,255,.08);
+  --font:-apple-system, "PingFang SC", system-ui, sans-serif;
+  --line:#dbe7f4;          /* 1px 细边框色。现代审美用细线，不用投影 */
+
+  /* 字号阶梯 —— 故意拉开跨度。所有字号都差不多，是业余感最大的来源 */
+  --fs-hero:40px;   /* 英雄元素：每页最大的那一个数字或标题，其余全部退后 */
+  --fs-title:22px;
+  --fs-body:16px;   /* 输入框不得低于 16px，否则 iOS 会自动放大整页 */
+  --fs-meta:13px;
+
+  --pad:18px;       /* 卡片内边距。留白是最便宜的高级感，宽屏下会变大 */
+  --gap:12px;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --dur:.18s;
+}
+
+/* 深色 · 科技暗色（系统深色且未手动锁浅色时，或手动锁深色时） */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1419;
+    --sidebar:#161b22;
+    --sidebar-text:#8b949e;
+    --sidebar-active:#1f6feb;
+    --card:#161b22;
+    --text:#e6edf3;
+    --text-dim:#7d8590;
+    --accent:#1f6feb;
+    --radius:10px;
+    --shadow:0 0 0 1px rgba(255,255,255,.06);
+    --line:#2a323d;
+  }
+  :root:not([data-theme="light"]) .nav button.on{color:#fff}
+}
+:root[data-theme="dark"]{
+  --bg:#0f1419;
+  --sidebar:#161b22;
+  --sidebar-text:#8b949e;
+  --sidebar-active:#1f6feb;
+  --card:#161b22;
+  --text:#e6edf3;
+  --text-dim:#7d8590;
+  --accent:#1f6feb;
+  --radius:10px;
+  --shadow:0 0 0 1px rgba(255,255,255,.06);
+  --line:#2a323d;
+}
+:root[data-theme="dark"] .nav button.on{color:#fff}
+
+/* ==== 基础 ==== */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:var(--font); background:var(--bg); color:var(--text);
+  font-size:var(--fs-body); line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden; /* 整页不滚，只让内容区滚 —— 避免 iOS 橡皮筋把侧边栏拽走 */
+}
+.app{display:flex;height:100%}
+
+/* ==== 侧边栏：常驻窄条 ==== */
+.side{
+  width:76px;flex-shrink:0;background:var(--sidebar);
+  display:flex;flex-direction:column;
+  padding:calc(12px + env(safe-area-inset-top,0)) 6px calc(12px + env(safe-area-inset-bottom,0));
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.side::-webkit-scrollbar{display:none}
+.brand{text-align:center;margin-bottom:14px;flex-shrink:0}
+.brand .logo{font-size:26px;line-height:1}
+.brand .name{font-size:11px;color:var(--sidebar-text);opacity:.85;margin-top:4px;line-height:1.3;word-break:break-all}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{
+  border:none;background:transparent;font-family:inherit;
+  padding:10px 2px;border-radius:12px;
+  color:var(--sidebar-text);font-size:11px;line-height:1.3;
+}
+.nav button .ico{display:block;font-size:21px;margin-bottom:3px}
+.nav button.on{background:var(--sidebar-active)}
+
+/* ==== 内容区 ==== */
+.main{
+  flex:1;min-width:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(14px + env(safe-area-inset-top,0)) 12px calc(28px + env(safe-area-inset-bottom,0));
+  scroll-behavior:smooth;
+}
+.page{display:none;flex-direction:column;gap:var(--gap)}
+.page.on{display:flex}
+.page-title{font-size:var(--fs-title);font-weight:500;line-height:1.25;letter-spacing:-.01em;margin-bottom:2px}
+.page-sub{font-size:var(--fs-meta);color:var(--text-dim);margin-top:-6px;margin-bottom:2px}
+
+/* ==== 卡片 ==== */
+.card{
+  background:var(--card);border-radius:var(--radius);
+  border:1px solid var(--line);   /* 细线代替投影 */
+  box-shadow:var(--shadow);padding:var(--pad);
+}
+.card h2{font-size:17px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.hint{font-size:var(--fs-meta);color:var(--text-dim);margin-top:8px;line-height:1.6}
+.empty{font-size:var(--fs-meta);color:var(--text-dim);text-align:center;padding:22px 0}
+
+/* 英雄元素：每页最大的那一个。数字一律等宽，对齐后立刻专业 */
+.hero{font-size:var(--fs-hero);font-weight:500;line-height:1.1;letter-spacing:-.01em}
+.num,.hero{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.unit{font-size:var(--fs-meta);color:var(--text-dim);font-weight:400;margin-left:5px}
+
+/* ==== 表单：字号必须 >=16px，否则 iOS 会自动放大整页 ==== */
+input,textarea,select{
+  transition:border-color var(--dur) var(--ease);
+  width:100%;font-size:var(--fs-body);font-family:inherit;color:var(--text);line-height:1.5;
+  padding:11px 13px;border:1px solid rgba(128,128,128,.28);
+  border-radius:calc(var(--radius) - 6px);background:transparent;
+}
+textarea{min-height:88px;resize:vertical;line-height:1.6}
+input::placeholder,textarea::placeholder{color:var(--text-dim)}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+.btn{
+  padding:11px 18px;font-size:15px;font-family:inherit;white-space:nowrap;
+  border:none;border-radius:calc(var(--radius) - 6px);
+  background:var(--accent);color:#fff;
+}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid rgba(128,128,128,.3)}
+.btn.danger{background:#d9534f}
+.btn:active{opacity:.75}
+.row{display:flex;gap:8px;align-items:center}
+.row .btn{flex-shrink:0}
+
+/* ==== 列表 ==== */
+.item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(128,128,128,.22)}
+.item:last-child{border-bottom:none}
+.item .grow{flex:1;min-width:0;line-height:1.6}
+.item .del{color:var(--text-dim);font-size:16px;background:none;border:none;padding:0 4px;flex-shrink:0}
+.box{
+  width:21px;height:21px;flex-shrink:0;margin-top:1px;
+  border:2px solid var(--accent);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;color:#fff;background:transparent;
+}
+.item.done .box{background:var(--accent)}
+.item.done .grow{text-decoration:line-through;color:var(--text-dim)}
+
+/* ==== 提示条 ==== */
+.banner{
+  background:var(--accent);color:#fff;padding:11px 14px;
+  border-radius:var(--radius);font-size:13px;line-height:1.5;
+  display:flex;align-items:center;gap:10px;
+}
+.banner button{
+  margin-left:auto;flex-shrink:0;background:rgba(255,255,255,.22);color:#fff;
+  border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-family:inherit;
+}
+.toast{
+  position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom,0));
+  transform:translateX(-50%) translateY(8px);z-index:99;
+  background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:20px;
+  font-size:14px;opacity:0;pointer-events:none;
+  transition:opacity var(--dur) var(--ease),transform var(--dur) var(--ease);
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ==== 应用内对话框（代原生 confirm/prompt，内置浏览器里原生弹窗会被吞） ==== */
+.dlg-mask{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.dlg{
+  background:var(--card);color:var(--text);border-radius:var(--radius);
+  box-shadow:0 12px 40px rgba(0,0,0,.35);padding:20px;width:100%;max-width:320px;
+}
+.dlg-msg{font-size:15px;line-height:1.6;margin-bottom:16px}
+.dlg-input{
+  width:100%;font-size:16px;font-family:inherit;color:var(--text);
+  padding:11px 13px;border:1px solid var(--line);border-radius:10px;
+  background:transparent;margin-bottom:16px;
+}
+.dlg-row{display:flex;gap:10px;justify-content:flex-end}
+.dlg .dlg-input{margin-top:-4px}
+.dlg:has(.dlg-input) .dlg-row{margin-top:0}
+
+/* ════════ 动画 ════════
+   只做「让状态变化可理解」的动画，不做炫技的。
+   这是一天开十次的工具，任何多余动效第十次看就烦了。 */
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.page.on > *{animation:rise .26s var(--ease) both}
+/* 错开进场，形成自上而下的节奏，只错开前几个免得末尾等太久 */
+.page.on > *:nth-child(1){animation-delay:0s}
+.page.on > *:nth-child(2){animation-delay:.03s}
+.page.on > *:nth-child(3){animation-delay:.06s}
+.page.on > *:nth-child(4){animation-delay:.09s}
+.page.on > *:nth-child(n+5){animation-delay:.12s}
+
+.nav button,.btn,.card,.item .box{transition:all var(--dur) var(--ease)}
+.btn:active{opacity:.75;transform:scale(.98)}
+.item .box{transform:scale(1)}
+.item.done .box{animation:pop .22s var(--ease)}
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.18)}100%{transform:scale(1)}}
+
+/* 用户在系统里关了动效就一律不放 —— 这不是可选项 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-delay:0s !important;
+    transition-duration:.01ms !important;scroll-behavior:auto !important}
+}
+
+/* ════════ 平板与横屏：侧栏展开成图标配文字 ════════ */
+@media (min-width:700px){
+  :root{--fs-hero:48px;--fs-title:26px;--pad:24px;--gap:16px}
+  .side{width:200px;padding-left:12px;padding-right:12px}
+  .brand{text-align:left;padding:0 8px;margin-bottom:22px}
+  .brand .logo{font-size:30px}
+  .brand .name{font-size:14px;margin-top:6px;word-break:normal}
+  .nav{gap:2px}
+  .nav button{
+    display:flex;align-items:center;gap:12px;text-align:left;
+    padding:12px 14px;font-size:15px;
+  }
+  .nav button .ico{display:inline;font-size:20px;margin:0;width:24px;text-align:center}
+  .main{padding:28px 32px 40px}
+}
+
+/* ════════ 桌面：卡片并排 ════════
+   标题、副标题、提示条永远占满整行；卡片默认半宽。
+   需要占满的重要卡片（英雄卡、长列表）加 class="card wide"。 */
+@media (min-width:1100px){
+  :root{--fs-hero:56px;--fs-title:30px;--pad:30px;--gap:20px}
+  .side{width:240px}
+  .main{padding:36px 44px 52px}
+  .page.on{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:var(--gap);align-content:start;
+  }
+  .page.on > .page-title,
+  .page.on > .page-sub,
+  .page.on > .banner,
+  .page.on > .card.wide{grid-column:1 / -1}
+}
+
+/* 超宽屏限制内容宽度并居中 —— 一行文字超过 40 个汉字就难读了 */
+@media (min-width:1700px){
+  .main > .page.on{max-width:1400px;margin:0 auto}
+}
+
+/* ==== 功能共用：标签 / 进度 / 节点 / 小按钮 ==== */
+.chip{
+  display:inline-block;padding:2px 9px;border-radius:99px;flex-shrink:0;
+  background:var(--sidebar-active);color:var(--text);font-size:12px;line-height:1.5;
+}
+.meta{font-size:13px;color:var(--text-dim);line-height:1.55}
+.overdue{color:#d9534f;font-weight:600}
+.btn.small{padding:7px 12px;font-size:13px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.step{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--text-dim)}
+.step.done{background:var(--accent);border-color:var(--accent);color:#fff}
+.row select{width:auto;flex-shrink:0}
+.item select{width:auto;flex-shrink:0;padding:7px 9px}
+.statRow{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed rgba(128,128,128,.22)}
+.statRow:last-child{border-bottom:none}
+.statRow .n{font-size:22px;font-weight:600}
+
+/* ==== 设置：主题三档切换 ==== */
+.seg{display:flex;gap:8px}
+.seg button{
+  flex:1;padding:10px 4px;font-size:14px;font-family:inherit;color:var(--text);
+  border-radius:calc(var(--radius) - 6px);border:1px solid rgba(128,128,128,.3);background:transparent;
+}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ==== 口令锁遮罩 ==== */
+#lockScreen{
+  position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:24px;
+}
+#lockScreen.on{display:flex}
+#lockScreen .pin{max-width:240px;text-align:center;letter-spacing:6px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ==== 侧边栏 START ==== -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">⭐</div>
+      <div class="name">造梦工作台</div>
+    </div>
+    <nav class="nav" id="nav">
+      <!-- 由 App.routes 自动渲染 -->
+    </nav>
+  </aside>
+  <!-- ==== 侧边栏 END ==== -->
+
+  <main class="main" id="main">
+
+    <!-- ==== 功能：今日计划 START ==== -->
+    <section class="page" id="page-plan">
+      <div class="page-title">今日计划</div>
+      <div class="page-sub">固定行程每天自动重置勾选，待办只记今天的</div>
+      <div class="card wide">
+        <h2>🕐 固定行程</h2>
+        <div id="planTplList"></div>
+        <div class="row" style="margin-top:12px">
+          <input type="time" id="planTplTime" style="width:auto;flex-shrink:0">
+          <input type="text" id="planTplText" placeholder="行程内容，如：晨会 / 去工地">
+          <button class="btn" onclick="Plan.addTpl()">添加</button>
+        </div>
+        <p class="hint">固定行程是模板，每天都会出现，勾掉只影响今天。</p>
+      </div>
+      <div class="card wide">
+        <h2>✅ 今日待办</h2>
+        <div id="planTodoList"></div>
+        <div class="row" style="margin-top:12px">
+          <input type="text" id="planTodoText" placeholder="今天临时要办的事">
+          <button class="btn" onclick="Plan.addTodo()">添加</button>
+        </div>
+      </div>
+    </section>
+    <!-- ==== 功能：今日计划 END ==== -->
+
+    <!-- ==== 功能：在谈客户 START ==== -->
+    <section class="page" id="page-clients">
+      <div class="page-title">在谈客户</div>
+      <div class="page-sub">谁在谈、走到哪一步、下一步做什么，一眼看清</div>
+      <div class="card wide">
+        <h2>➕ 添加客户</h2>
+        <div class="row">
+          <input type="text" id="clientName" placeholder="客户称呼，如：王女士">
+          <select id="clientStage">
+            <option>初聊</option>
+            <option>量房</option>
+            <option>方案</option>
+            <option>效果</option>
+            <option>报价</option>
+            <option>待签</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <input type="text" id="clientNext" placeholder="下一步动作，如：发报价单">
+          <button class="btn" onclick="Clients.add()">添加</button>
+        </div>
+      </div>
+      <div class="card wide">
+        <h2>🤝 客户名单</h2>
+        <div id="clientList"></div>
+      </div>
+    </section>
+    <!-- ==== 功能：在谈客户 END ==== -->
+
+    <!-- ==== 功能：方案进度 START ==== -->
+    <section class="page" id="page-designs">
+      <div class="page-title">方案进度</div>
+      <div class="page-sub">每个方案走到哪个节点，完成度自动算</div>
+      <div class="card wide">
+        <h2>➕ 新建方案</h2>
+        <div class="row">
+          <input type="text" id="designClient" placeholder="客户称呼">
+          <input type="text" id="designStyle" placeholder="风格，如：奶油法式">
+          <button class="btn" onclick="Designs.add()">新建</button>
+        </div>
+      </div>
+      <div class="card wide">
+        <h2>✏️ 进行中的方案</h2>
+        <div id="designList"></div>
+      </div>
+    </section>
+    <!-- ==== 功能：方案进度 END ==== -->
+
+    <!-- ==== 功能：工地动态 START ==== -->
+    <section class="page" id="page-sites">
+      <div class="page-title">工地动态</div>
+      <div class="page-sub">每个工地现在在做什么工序、今天有什么要处理</div>
+      <div class="card wide">
+        <h2>➕ 新建工地</h2>
+        <div class="row">
+          <input type="text" id="siteName" placeholder="工地名称，如：张先生 · 江景房">
+          <input type="text" id="siteStage" placeholder="当前工序，如：水电验收">
+          <button class="btn" onclick="Sites.add()">新建</button>
+        </div>
+      </div>
+      <div id="siteList" style="display:flex;flex-direction:column;gap:var(--gap)"></div>
+    </section>
+    <!-- ==== 功能：工地动态 END ==== -->
+
+    <!-- ==== 功能：问题追踪 START ==== -->
+    <section class="page" id="page-issues">
+      <div class="page-title">问题追踪</div>
+      <div class="page-sub">所有项目悬着的问题汇成一张表，解决一个划掉一个</div>
+      <div class="card wide">
+        <h2>➕ 记一个问题</h2>
+        <div class="row">
+          <input type="text" id="issueWho" placeholder="所属客户 / 工地">
+          <input type="text" id="issueText" placeholder="什么问题">
+          <button class="btn" onclick="Issues.add()">记下</button>
+        </div>
+      </div>
+      <div class="card wide">
+        <h2>⚠️ 未解决</h2>
+        <div id="issueOpenList"></div>
+      </div>
+      <div class="card wide">
+        <h2>✔ 已解决</h2>
+        <div id="issueDoneList"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn ghost small" onclick="Issues.clearDone()">清理已解决</button>
+        </div>
+      </div>
+    </section>
+    <!-- ==== 功能：问题追踪 END ==== -->
+
+    <!-- ==== 功能：抖音排期 START ==== -->
+    <section class="page" id="page-douyin">
+      <div class="page-title">抖音排期</div>
+      <div class="page-sub">这周发哪几条、走到哪一步，别让更新断档</div>
+      <div class="card wide">
+        <h2>🎬 本周排期</h2>
+        <div class="row">
+          <input type="text" id="douyinCol" placeholder="栏目，如：说真话">
+          <input type="text" id="douyinTitle" placeholder="标题 / 选题">
+          <button class="btn" onclick="Douyin.addPlan()">加入</button>
+        </div>
+        <div id="douyinList" style="margin-top:8px"></div>
+      </div>
+      <div class="card wide">
+        <h2>💡 选题灵感池</h2>
+        <div class="row">
+          <input type="text" id="ideaText" placeholder="闪过的选题，一行一条先记下来">
+          <button class="btn" onclick="Douyin.addIdea()">记下</button>
+        </div>
+        <div id="ideaList" style="margin-top:8px"></div>
+      </div>
+    </section>
+    <!-- ==== 功能：抖音排期 END ==== -->
+
+    <!-- ==== 功能：周复盘 START ==== -->
+    <section class="page" id="page-recap">
+      <div class="page-title">这一周</div>
+      <div class="page-sub">周日晚上看一眼，比任何提醒都管用</div>
+      <div class="card wide">
+        <div id="recapBody"></div>
+        <div class="row" style="margin-top:18px">
+          <button class="btn" onclick="Recap.makeCard()">生成图卡</button>
+        </div>
+        <p class="hint">生成一张能存下来的图，想发就发。图上不含你的具体记录内容。</p>
+      </div>
+    </section>
+    <!-- ==== 功能：周复盘 END ==== -->
+
+    <!-- 设置页是必备的，不要删 -->
+    <!-- ==== 功能：设置 START ==== -->
+    <section class="page" id="page-settings">
+      <div class="page-title">设置</div>
+
+      <div class="card">
+        <h2>💾 数据备份</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:12px">
+          你的所有数据都存在这台手机的浏览器里，不在任何服务器上。<br>
+          换手机、清理浏览器数据前，记得先导出备份。
+        </p>
+        <div class="row">
+          <button class="btn" onclick="Store.exportFile()">导出备份</button>
+          <button class="btn ghost" onclick="document.getElementById('importFile').click()">恢复备份</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="Store.importFile(this)">
+        <p class="hint" id="backupInfo"></p>
+      </div>
+
+      <!-- ==== 双端同步卡片 START ====（用户选单设备时删掉这张卡） -->
+      <div class="card wide" id="syncCard">
+        <h2>🔄 双端同步 <span class="hint" id="syncState" style="margin:0 0 0 auto;font-size:var(--fs-meta)"></span></h2>
+        <div id="syncOff">
+          <p class="hint" style="margin-top:0">
+            开启后手机和电脑登同一个账号，记的东西自动对齐。<br>
+            <b>数据会在你的设备和云端各存一份</b>，本地那份始终在，断网照样能记。<br>
+            云端那份是明文的——只有知道你密码的人能读，但平台运维理论上能看到。<br>
+            <b>密码忘了就进不去了，没有找回功能。</b>
+          </p>
+          <div style="margin-top:14px">
+            <input type="text" id="syncUser" placeholder="用户名（3-32 个字符，只用来定位你的数据）" autocomplete="username">
+          </div>
+          <div style="margin-top:10px">
+            <input type="password" id="syncPass" placeholder="密码（至少 8 位）" autocomplete="new-password">
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" onclick="Settings.enableSync()">开启同步</button>
+            <button class="btn ghost" onclick="Store.exportFile()">先导出备份</button>
+          </div>
+          <p class="hint">建议先导出一份备份再开——万一以后忘了密码，本地这份还在。</p>
+        </div>
+        <div id="syncOn" style="display:none">
+          <p class="hint" style="margin-top:0">账号：<b id="syncWho" class="mono"></b><br>上次同步：<span id="syncTime"></span></p>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" onclick="Sync.pull(true)">立即同步</button>
+            <button class="btn ghost" onclick="Settings.changePass()">改密码</button>
+            <button class="btn ghost" onclick="Sync.disable()">关闭同步</button>
+          </div>
+          <p class="hint">
+            刚在另一台设备改的东西，这边最多等一分钟才看得到（云端缓存机制），
+            等不及就点「立即同步」。
+          </p>
+        </div>
+      </div>
+      <!-- ==== 双端同步卡片 END ==== -->
+
+      <div class="card">
+        <h2>🎨 外观</h2>
+        <div class="seg" id="themeSeg">
+          <button data-mode="auto" onclick="Theme.set('auto')">跟随系统</button>
+          <button data-mode="dark" onclick="Theme.set('dark')">深色</button>
+          <button data-mode="light" onclick="Theme.set('light')">浅色</button>
+        </div>
+        <p class="hint">默认跟随手机系统深浅色；手动选了就锁住，存在本机设置里。</p>
+      </div>
+
+      <div class="card">
+        <h2>🔒 口令锁</h2>
+        <div id="lockBody"></div>
+      </div>
+
+      <div class="card">
+        <h2>⚠️ 危险操作</h2>
+        <button class="btn danger" onclick="Store.wipe()">清空所有数据</button>
+        <p class="hint">清空前请确认已经导出过备份，这个操作无法撤销。</p>
+      </div>
+
+      <div class="card">
+        <p class="hint" style="margin:0;text-align:center">
+          造梦工作台<br>
+          <span style="opacity:.6">由 不一书个人工作台生成器 生成</span>
+        </p>
+      </div>
+    </section>
+    <!-- ==== 功能：设置 END ==== -->
+
+    <!-- ==== 功能：口令锁 START ==== -->
+    <div id="lockScreen">
+      <div style="font-size:40px">⭐</div>
+      <div style="font-size:19px;font-weight:600">造梦工作台已锁定</div>
+      <input type="password" inputmode="numeric" class="pin" id="lockPinInput" placeholder="输入口令">
+      <button class="btn" onclick="Lock.tryUnlock()">解锁</button>
+      <p class="hint" id="lockHint">输入口令后才能打开</p>
+    </div>
+    <!-- ==== 功能：口令锁 END ==== -->
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Store · 存储抽象层
+   所有数据读写都必须走这里，不要直接用 localStorage。
+
+   ── 为什么数组型数据要用 list/upsert 而不是 get/set ──
+   Store.set('money', 整个数组) 是「整本账一起覆盖」。单设备没问题，
+   一旦两台设备各自离线改过，后上传的那份会把另一份的改动无声吞掉：
+
+     手机 10 条 → 加 1 条 = 11 条，上传
+     电脑 10 条 → 加另 1 条 = 11 条，后上传 → 手机加的那条消失
+
+   所以数组型一律用 upsert / softDelete，每条带修改时间，合并时逐条比对。
+   ═══════════════════════════════════════════════════════════ */
+const Store = (() => {
+  const NS  = 'bysdash:';
+  const SEC = 'bysdash$secret:';
+  const TOMB_TTL = 30 * 864e5;   // 墓碑保留 30 天，之后清掉（那时各端早同步过了）
+
+  /* 存储驱动：某些内置预览 / 无痕环境里 localStorage 一碰就抛 SecurityError，
+     探活失败就退回内存存储——界面至少能打开能点（那种环境里数据本来也存不住，
+     正式浏览器和部署后走的都是真 localStorage）。 */
+  const memStore = new Map();
+  const lsOK = (() => {
+    try { const t = '__bys_probe__'; localStorage.setItem(t, '1'); localStorage.removeItem(t); return true; }
+    catch { return false; }
+  })();
+
+  const driver = {
+    get(k){
+      if (!lsOK) { const v = memStore.get(k); return v === undefined ? null : JSON.parse(v); }
+      try { return JSON.parse(localStorage.getItem(k)); } catch { return null; }
+    },
+    set(k,v){
+      if (!lsOK) { memStore.set(k, JSON.stringify(v)); return true; }
+      try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+      catch(e){
+        // 配额超了几乎总是因为存了没压缩的图片
+        UI.toast('存储空间满了，请到设置里导出备份后清理旧数据');
+        console.error(e); return false;
+      }
+    },
+    remove(k){
+      if (!lsOK) { memStore.delete(k); return; }
+      try { localStorage.removeItem(k); } catch {}
+    },
+    keys(){
+      if (!lsOK) return [...memStore.keys()];
+      try { return Object.keys(localStorage); } catch { return []; }
+    }
+  };
+
+  const now = () => Date.now();
+
+  /** 按 id 逐条合并两个列表：同 id 取修改时间更新的那条 */
+  function mergeList(a, b){
+    const m = new Map();
+    for (const it of [...(a || []), ...(b || [])]) {
+      if (!it || !it.id) continue;
+      const prev = m.get(it.id);
+      if (!prev || (it._u || 0) > (prev._u || 0)) m.set(it.id, it);
+    }
+    return [...m.values()];
+  }
+
+  const S = {
+    /* ── 单值：配置、开关、计数快照这类 ── */
+    get(key, fallback = null){
+      const v = driver.get(NS + key);
+      return v === null || v === undefined ? fallback : v;
+    },
+    set(key, val){
+      const ok = driver.set(NS + key, val);
+      if (ok) this._touch();
+      return ok;
+    },
+    remove(key){ driver.remove(NS + key); this._touch(); },
+
+    /* ── 数组型：一条一条存，可合并 ── */
+    /** 读列表：过滤掉墓碑，顺手清理过期墓碑 */
+    list(key, sort){
+      const raw = this.get(key, []);
+      if (!Array.isArray(raw)) return [];
+      const cut = now() - TOMB_TTL;
+      const alive = [], keep = [];
+      for (const it of raw) {
+        if (it && it._d) { if ((it._u || 0) > cut) keep.push(it); continue; }
+        if (it) { alive.push(it); keep.push(it); }
+      }
+      if (keep.length !== raw.length) driver.set(NS + key, keep);  // 静默清理，不算一次写
+      return sort ? alive.sort(sort) : alive;
+    },
+
+    /** 增或改一条。没有 id 就生成一个；自动打修改时间 */
+    upsert(key, item){
+      const raw = this.get(key, []);
+      const it = Object.assign({}, item);
+      if (!it.id) it.id = Util.uid();
+      it._u = now();
+      delete it._d;
+      const i = raw.findIndex(x => x && x.id === it.id);
+      if (i >= 0) raw[i] = Object.assign({}, raw[i], it); else raw.push(it);
+      this.set(key, raw);
+      return it;
+    },
+
+    /** 软删除：留一个墓碑，否则另一台设备同步回来会把它复活 */
+    softDelete(key, id){
+      const raw = this.get(key, []);
+      const i = raw.findIndex(x => x && x.id === id);
+      if (i >= 0) raw[i] = { id, _d: 1, _u: now() };
+      else raw.push({ id, _d: 1, _u: now() });
+      this.set(key, raw);
+    },
+
+    /** 计数器：存成事件列表而不是一个数字。
+        数字没法正确合并（取大值会丢、相加会重复），列表天然可以。 */
+    incr(key, n = 1){
+      const raw = this.get(key, []);
+      for (let i = 0; i < n; i++) raw.push({ id: Util.uid(), _u: now() });
+      this.set(key, raw);
+      return this.count(key);
+    },
+    decr(key){
+      const alive = this.list(key);
+      if (alive.length) this.softDelete(key, alive[alive.length - 1].id);
+      return this.count(key);
+    },
+    count(key){ return this.list(key).length; },
+
+    /* ── 按天：key 自带日期，两台设备改的是不同 key，天然不冲突 ── */
+    getDaily(key, fallback = null){ return this.get(key + ':' + Util.today(), fallback); },
+    setDaily(key, val){ return this.set(key + ':' + Util.today(), val); },
+    listDaily(key, sort){ return this.list(key + ':' + Util.today(), sort); },
+    upsertDaily(key, item){ return this.upsert(key + ':' + Util.today(), item); },
+    incrDaily(key, n = 1){ return this.incr(key + ':' + Util.today(), n); },
+    decrDaily(key){ return this.decr(key + ':' + Util.today()); },
+    countDaily(key){ return this.count(key + ':' + Util.today()); },
+
+    /* ── 敏感数据：独立命名空间，不进备份 ── */
+    getSecret(key){ return driver.get(SEC + key); },
+    setSecret(key, val){ return driver.set(SEC + key, val); },
+
+
+    /* ── 旧版数据迁移 ──
+       v1.0 生成的工作台里，体重 [{date,value}]、日记 [{date,text}]、读书 [{title,...}]
+       这类结构是没有 id 的。而合并是按 id 做的，没 id 的条目会被整个跳过——
+       也就是升级后一开同步，这些历史记录会全部消失。
+       所以启动时补一次 id。
+
+       id 必须由内容算出来（不能用随机数）：手机和电脑各自迁移同一条记录时，
+       算出的 id 要一样，否则合并后会变成两条重复。 */
+    _stableId(o){
+      const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return 'm' + (h >>> 0).toString(36);
+    },
+
+    migrate(){
+      if (this.get('_migrated')) return 0;
+      let n = 0;
+      driver.keys().filter(k => k.startsWith(NS)).forEach(k => {
+        const v = driver.get(k);
+        if (!Array.isArray(v) || !v.length) return;
+        let touched = false;
+        const fixed = v.map(it => {
+          if (!it || typeof it !== 'object') return it;
+          const o = Object.assign({}, it);
+          if (!o.id) { o.id = this._stableId(it); touched = true; }
+          if (!o._u) { o._u = 1; touched = true; }   // 标成很早，新改动永远胜出
+          return o;
+        });
+        if (touched) { driver.set(k, fixed); n++; }
+      });
+      this.set('_migrated', Date.now());
+      if (n) console.info(`[迁移] 已为 ${n} 组历史数据补齐标识，一条没少`);
+      return n;
+    },
+
+    /* ── 供云同步用 ── */
+    _touch(){
+      driver.set(NS + '_lastWrite', now());
+      if (typeof Sync !== 'undefined' && Sync.on && Sync.on()) Sync.schedule();
+    },
+    mergeList,
+    /** 把远端整包数据合并进本地。数组型逐条合并，单值取时间新的 */
+    mergeRemote(remote){
+      if (!remote || typeof remote !== 'object') return 0;
+      let changed = 0;
+      for (const [key, rv] of Object.entries(remote)) {
+        if (key.startsWith('_')) continue;
+        const lv = this.get(key, null);
+        if (Array.isArray(rv)) {
+          const merged = mergeList(Array.isArray(lv) ? lv : [], rv);
+          if (JSON.stringify(merged) !== JSON.stringify(lv)) { driver.set(NS + key, merged); changed++; }
+        } else if (lv === null || lv === undefined) {
+          driver.set(NS + key, rv); changed++;
+        }
+        // 单值且两边都有：保守起来保留本地，避免远端旧值覆盖刚改的设置
+      }
+      return changed;
+    },
+    /** 导出给云端或备份用的整包（不含 secret） */
+    dump(){
+      const data = {};
+      driver.keys().filter(k => k.startsWith(NS)).forEach(k => {
+        data[k.slice(NS.length)] = driver.get(k);
+      });
+      return data;
+    },
+
+    /* ── 备份 ── */
+    exportAll(){
+      return { app:'造梦工作台', version:2, exportedAt:new Date().toISOString(), data:this.dump() };
+    },
+
+    exportFile(){
+      const blob = new Blob([JSON.stringify(this.exportAll(), null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '造梦备份-' + Util.today() + '.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      this.set('_lastBackup', now());
+      UI.toast('已导出，建议转发到微信文件传输助手存一份');
+      Settings.refreshBackupInfo();
+    },
+
+    importFile(input){
+      const f = input.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = async e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!parsed.data) throw new Error('格式不对');
+          if (!await UI.confirmDlg('恢复备份会与当前数据合并，确定吗？')) return;
+          // 用合并而不是覆盖：万一用户导入的是旧备份，现有数据不会被抹掉
+          const n = this.mergeRemote(parsed.data);
+          Object.entries(parsed.data).forEach(([k,v]) => {
+            if (!Array.isArray(v) && this.get(k, null) === null) driver.set(NS + k, v);
+          });
+          UI.toast('已合并 ' + n + ' 项，正在重新加载');
+          setTimeout(() => location.reload(), 900);
+        } catch(err){ UI.toast('文件读不了，可能不是备份文件'); }
+      };
+      r.readAsText(f);
+      input.value = '';
+    },
+
+    async wipe(){
+      if (!await UI.confirmDlg('确定清空所有数据？这个操作无法撤销。')) return;
+      if (!await UI.confirmDlg('再确认一次：真的要清空吗？')) return;
+      driver.keys().filter(k => k.startsWith(NS)).forEach(k => driver.remove(k));
+      location.reload();
+    }
+  };
+  return S;
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   Util · 工具
+   ═══════════════════════════════════════════════════════════ */
+const Util = {
+  today(){
+    const d = new Date();
+    return d.getFullYear() + '-' +
+           String(d.getMonth()+1).padStart(2,'0') + '-' +
+           String(d.getDate()).padStart(2,'0');
+  },
+  uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); },
+  dateOf(d){
+    return d.getFullYear() + '-' +
+           String(d.getMonth()+1).padStart(2,'0') + '-' +
+           String(d.getDate()).padStart(2,'0');
+  },
+  /** 某个日期（YYYY-MM-DD）距今几天 */
+  daysSince(dateStr){
+    if (!dateStr) return 0;
+    const a = new Date(dateStr + 'T00:00:00');
+    const b = new Date(this.today() + 'T00:00:00');
+    return Math.max(0, Math.round((b - a) / 864e5));
+  },
+  esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
+
+  // 图片必须压缩后再存，否则几张手机原图就撑爆 localStorage
+  compressImage(file, maxW = 800, quality = .72){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width);
+        const cv = document.createElement('canvas');
+        cv.width  = img.width  * scale;
+        cv.height = img.height * scale;
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/jpeg', quality));
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+};
+
+
+/* ═══════════════════════════════════════════════════════════
+   UI · 界面工具
+   ═══════════════════════════════════════════════════════════ */
+const UI = {
+  toast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(this._t);
+    this._t = setTimeout(() => t.classList.remove('on'), 2200);
+  },
+  banner(html, pageId = null){
+    const box = document.createElement('div');
+    box.className = 'banner';
+    box.innerHTML = html;
+    const target = pageId ? document.getElementById(pageId) : document.querySelector('.page.on');
+    target?.prepend(box);
+    return box;
+  },
+  /* 应用内对话框：不用原生 confirm/prompt —— App 预览、微信等内置浏览器
+     会直接吞掉原生弹窗，点了跟没点一样（删除按钮「没反应」就是这么来的）。 */
+  _dlg(build){
+    return new Promise(resolve => {
+      const mask = document.createElement('div');
+      mask.className = 'dlg-mask';
+      mask.innerHTML = '<div class="dlg"><div class="dlg-msg"></div></div>';
+      const done = v => { mask.remove(); resolve(v); };
+      build(mask.querySelector('.dlg'), done);
+      document.body.appendChild(mask);
+    });
+  },
+  confirmDlg(msg, okText = '确定'){
+    return this._dlg((dlg, done) => {
+      dlg.querySelector('.dlg-msg').textContent = msg;
+      const row = document.createElement('div');
+      row.className = 'dlg-row';
+      row.innerHTML = '<button class="btn ghost">取消</button><button class="btn danger"></button>';
+      row.children[1].textContent = okText;
+      row.children[0].onclick = () => done(false);
+      row.children[1].onclick = () => done(true);
+      dlg.appendChild(row);
+    });
+  },
+  inputDlg(msg, initial = '', type = 'text'){
+    return this._dlg((dlg, done) => {
+      dlg.querySelector('.dlg-msg').textContent = msg;
+      const inp = document.createElement('input');
+      inp.type = type; inp.className = 'dlg-input'; inp.value = initial;
+      dlg.appendChild(inp);
+      const row = document.createElement('div');
+      row.className = 'dlg-row';
+      row.innerHTML = '<button class="btn ghost">取消</button><button class="btn">确定</button>';
+      row.children[0].onclick = () => done(null);
+      row.children[1].onclick = () => done(inp.value);
+      dlg.appendChild(row);
+      setTimeout(() => inp.focus(), 60);
+    });
+  }
+};
+
+
+/* ═══════════════════════════════════════════════════════════
+   App · 路由与启动
+   每加一个功能，在 routes 里加一条，侧边栏自动就有了。
+   ═══════════════════════════════════════════════════════════ */
+const App = {
+  routes: [
+    { id:'plan',     icon:'📅', name:'今日计划', onShow: () => Plan.render()    },
+    { id:'clients',  icon:'🤝', name:'在谈客户', onShow: () => Clients.render() },
+    { id:'designs',  icon:'✏️', name:'方案进度', onShow: () => Designs.render() },
+    { id:'sites',    icon:'🏗️', name:'工地动态', onShow: () => Sites.render()   },
+    { id:'issues',   icon:'⚠️', name:'问题追踪', onShow: () => Issues.render()  },
+    { id:'douyin',   icon:'🎬', name:'抖音排期', onShow: () => Douyin.render()  },
+    { id:'recap',    icon:'📊', name:'每周复盘', onShow: () => Recap.render()   },
+    { id:'settings', icon:'⚙️', name:'设置',     onShow: () => Settings.render() }
+  ],
+
+  go(id){
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+    document.getElementById('page-' + id)?.classList.add('on');
+    document.querySelectorAll('#nav button').forEach(b =>
+      b.classList.toggle('on', b.dataset.id === id));
+    document.getElementById('main').scrollTop = 0;
+    Store.set('_lastPage', id);
+    this.routes.find(r => r.id === id)?.onShow?.();
+  },
+
+  init(){
+    Store.migrate();          // 旧版数据补齐 id，无感升级
+    Theme.init();             // 主题手动偏好（跟随系统时什么都不做）
+    // 渲染侧边栏
+    document.getElementById('nav').innerHTML = this.routes.map(r =>
+      `<button data-id="${r.id}" onclick="App.go('${r.id}')">
+         <span class="ico">${r.icon}</span>${r.name}
+       </button>`).join('');
+
+    // 回到上次看的那一页
+    const last = Store.get('_lastPage');
+    this.go(this.routes.some(r => r.id === last) ? last : this.routes[0].id);
+
+    this.checkBackup();
+    if (typeof Sync !== 'undefined') Sync.init();
+    Lock.init();              // 设了口令就先上锁
+  },
+
+  /** 重绘当前页。同步拉到新数据后调用 */
+  refresh(){
+    const cur = document.querySelector('.page.on');
+    if (!cur) return;
+    const id = cur.id.replace('page-', '');
+    this.routes.find(r => r.id === id)?.onShow?.();
+  },
+
+  // 用户永远不会主动点导出，所以要主动提醒
+  checkBackup(){
+    const last = Store.get('_lastBackup');
+    const write = Store.get('_lastWrite');
+    if (!write) return;                                  // 还没存过东西，不用提醒
+    const days = last ? (Date.now() - last) / 864e5 : 99;
+    if (days < 7) return;
+    const b = UI.banner(
+      `<span>${last ? '已经 ' + Math.floor(days) + ' 天没备份了' : '记得备份一下，数据只在这台手机上'}</span>
+       <button onclick="App.go('settings')">去备份</button>`);
+  }
+};
+
+
+/* ═══════════════════════════════════════════════════════════
+   Settings · 设置页
+   ═══════════════════════════════════════════════════════════ */
+const Settings = {
+  // 本工作台没有联网功能，不需要任何 API key
+  keys: [],
+
+  render(){
+    this.refreshBackupInfo();
+    this.renderSync();
+    Theme.syncUI();
+    Lock.syncUI();
+    this.keys.forEach(k => {
+      const el = document.getElementById('key_' + k);
+      if (el) el.value = Store.getSecret(k) || '';
+    });
+    if (!this.keys.length) document.getElementById('apiCard')?.remove();
+  },
+
+  enableSync(){
+    Sync.enable(document.getElementById('syncUser').value,
+                document.getElementById('syncPass').value);
+  },
+
+  async changePass(){
+    const np = await UI.inputDlg('输入新密码（至少 8 位）', '', 'password');
+    if (np) Sync.changePass(np);
+  },
+
+  renderSync(){
+    const card = document.getElementById('syncCard');
+    if (!card || typeof Sync === 'undefined') return;
+    const on = Sync.on();
+    document.getElementById('syncOff').style.display = on ? 'none' : 'block';
+    document.getElementById('syncOn').style.display  = on ? 'block' : 'none';
+    if (on) {
+      document.getElementById('syncWho').textContent = Sync.cfg().user;
+      const t = Store.get('_syncAt');
+      document.getElementById('syncTime').textContent =
+        t ? new Date(t).toLocaleString('zh-CN') : '还没同步过';
+    }
+  },
+
+  saveKeys(){
+    this.keys.forEach(k => {
+      const el = document.getElementById('key_' + k);
+      if (el) Store.setSecret(k, el.value.trim());
+    });
+    UI.toast('已保存');
+  },
+
+  refreshBackupInfo(){
+    const last = Store.get('_lastBackup');
+    const el = document.getElementById('backupInfo');
+    if (el) el.textContent = last
+      ? '上次备份：' + new Date(last).toLocaleDateString('zh-CN')
+      : '还没备份过';
+  }
+};
+
+
+/* ==== 双端同步 START ====
+   用户选「只在一台设备用」时，把这整段（以及设置页里的 syncCard）删掉。
+
+   三条设计红线，破了就会烧掉免费额度或者丢数据：
+   1. 本地优先 —— 写入永远先落 localStorage，界面立刻变。云端是异步的。
+      断网、KV 抽风、额度用完，工作台照常能用，只是不同步。
+   2. 绝不轮询 —— 只在「打开时 / 切回前台 / 手动刷新」拉取。
+      每 30 秒轮一次的话，一台设备一个月就是 8 万多次函数调用。
+   3. 推送防抖 —— 改动后等 4 秒再推，把连续操作合并成一次请求。
+      勾 10 个待办应该是 1 次调用，不是 10 次。 */
+const Sync = {
+  DEBOUNCE: 4000,
+  _timer: null,
+  _busy: false,
+
+  cfg(){ return Store.get('_sync', { on:false, user:'' }); },
+  on(){ return !!this.cfg().on; },
+  pass(){ return Store.getSecret('syncPass') || ''; },
+
+  async call(action, extra = {}){
+    const c = this.cfg();
+    const r = await fetch('/api/sync', {
+      method:'POST',
+      headers:{ 'content-type':'application/json' },
+      body: JSON.stringify(Object.assign({ action, user:c.user, pass:this.pass() }, extra))
+    });
+    const j = await r.json().catch(() => ({ error:'返回格式不对' }));
+    if (!r.ok) throw new Error(j.error || ('请求失败 ' + r.status));
+    return j;
+  },
+
+  /** 开启同步：首次会把这个用户名注册下来 */
+  async enable(user, pass){
+    user = (user || '').trim().toLowerCase();
+    if (user.length < 3) return UI.toast('用户名至少 3 个字符');
+    if ((pass || '').length < 8) return UI.toast('密码至少 8 位');
+    Store.set('_sync', { on:true, user });
+    Store.setSecret('syncPass', pass);
+    try {
+      const j = await this.call('push', { data: Store.dump() });   // push 兼注册
+      if (j.data) Store.mergeRemote(j.data);
+      Store.set('_syncAt', Date.now());
+      UI.toast(j.created ? '同步已开启' : '已连上，数据已合并');
+      setTimeout(() => location.reload(), 900);
+    } catch(e){
+      Store.set('_sync', { on:false, user:'' });
+      Store.setSecret('syncPass', '');
+      UI.toast(e.message);
+    }
+  },
+
+  async disable(){
+    if (!await UI.confirmDlg('关闭同步？本地数据一条不会少，只是不再和云端对齐。')) return;
+    Store.set('_sync', { on:false, user:'' });
+    Store.setSecret('syncPass', '');
+    UI.toast('已关闭同步');
+    Settings.render();
+  },
+
+  async changePass(np){
+    if ((np || '').length < 8) return UI.toast('新密码至少 8 位');
+    try {
+      await this.call('chpass', { newPass: np });
+      Store.setSecret('syncPass', np);
+      UI.toast('密码已改');
+    } catch(e){ UI.toast(e.message); }
+  },
+
+  /** 拉取并合并。失败一律静默降级——本地数据才是主的 */
+  async pull(loud){
+    if (!this.on() || this._busy) return;
+    this._busy = true;
+    this.status('同步中');
+    try {
+      const j = await this.call('pull');
+      const n = Store.mergeRemote(j.data || {});
+      Store.set('_syncAt', Date.now());
+      this.status('已同步');
+      if (n) { if (loud) UI.toast('拉到 ' + n + ' 处更新'); App.refresh(); }
+      else if (loud) UI.toast('已是最新');
+    } catch(e){
+      this.status('未同步');
+      if (loud) UI.toast(e.message.includes('NO_ACCOUNT') ? '云端还没有数据' : e.message);
+    } finally { this._busy = false; }
+  },
+
+  /** 改动后延迟推送，把连续操作合并成一次 */
+  schedule(){
+    if (!this.on()) return;
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => this.push(), this.DEBOUNCE);
+  },
+
+  async push(){
+    if (!this.on() || this._busy) return;
+    this._busy = true;
+    this.status('同步中');
+    try {
+      const j = await this.call('push', { data: Store.dump() });
+      if (j.data) Store.mergeRemote(j.data);
+      Store.set('_syncAt', Date.now());
+      this.status('已同步');
+    } catch(e){
+      this.status('未同步');
+      console.warn('同步失败，本地数据不受影响：', e.message);
+    } finally { this._busy = false; }
+  },
+
+  status(t){
+    const el = document.getElementById('syncState');
+    if (el) el.textContent = t;
+  },
+
+  init(){
+    if (!this.on()) return;
+    this.pull();                                   // 打开时拉一次
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.pull();           // 切回前台再拉一次。到此为止，不轮询
+    });
+    window.addEventListener('online', () => this.push());
+  }
+};
+/* ==== 双端同步 END ==== */
+
+
+/* ==== 功能：周复盘 START ====
+   这是默认功能，别删。它的作用不只是「看数据」——
+   人不会分享自己的待办列表，但会分享「我连续记录了 100 天」。
+   一张能存下来的图卡，传播效率比界面好看高一个量级。 */
+const Recap = {
+  /** 本周汇总，只读各功能自己的数据，不另存计数：
+      完成计划数＝今日计划本周勾掉的（固定行程 + 临时待办）
+      推进客户数＝本周跟进过或新建的在谈客户
+      解决问题数＝问题追踪里本周划掉的 */
+  planDoneOn(d){
+    const tpl = Store.get('plan_tdone:' + d, []);
+    const todos = Store.list('plan_todos:' + d).filter(t => t.done).length;
+    return (Array.isArray(tpl) ? tpl.length : 0) + todos;
+  },
+  collect(){
+    const days = [], today = new Date();
+    const dow = (today.getDay() + 6) % 7;               // 周一为一周之始
+    for (let i = 0; i < 7; i++){
+      const d = new Date(today); d.setDate(today.getDate() - dow + i);
+      days.push(Util.dateOf(d));
+    }
+    const done = days.reduce((s,d) => s + this.planDoneOn(d), 0);
+    const inWeek = ds => !!ds && days.includes(ds);
+    const clients = Store.list('clients').filter(c => inWeek(c.last) || inWeek(c.created)).length;
+    const issues = Store.list('issues').filter(i => inWeek(i.resolvedAt)).length;
+    // 连续有完成记录的天数：今天还没有就从昨天开始数
+    let streak = 0;
+    const probe = new Date(today);
+    if (this.planDoneOn(Util.dateOf(probe)) === 0) probe.setDate(probe.getDate() - 1);
+    while (streak < 90 && this.planDoneOn(Util.dateOf(probe)) > 0){
+      streak++;
+      probe.setDate(probe.getDate() - 1);
+    }
+    return { days, done, clients, issues, streak, from: days[0], to: days[6] };
+  },
+
+  render(){
+    const r = this.collect();
+    const el = document.getElementById('recapBody');
+    if (!el) return;
+    el.innerHTML = `
+      <div class="hero"><span class="num">${r.done}</span><span class="unit">件计划完成了</span></div>
+      <div style="margin-top:14px">
+        <div class="statRow"><span>🤝 推进客户</span><span class="n num">${r.clients} 个</span></div>
+        <div class="statRow"><span>⚠️ 解决问题</span><span class="n num">${r.issues} 个</span></div>
+        <div class="statRow"><span>🔥 连续有完成记录</span><span class="n num">${r.streak} 天</span></div>
+      </div>
+      <p class="hint">${r.from} 到 ${r.to}（周一到周日）</p>`;
+  },
+
+  /** 画一张 1080×1350 的图卡，取当前主题色，右下角轻署名 */
+  async makeCard(){
+    const r = this.collect();
+    const cs = getComputedStyle(document.documentElement);
+    const v = n => cs.getPropertyValue(n).trim();
+    const W = 1080, H = 1350, cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    const font = (sz, w) => `${w||400} ${sz}px -apple-system,"PingFang SC",system-ui,sans-serif`;
+
+    g.fillStyle = v('--bg') || '#f5f2ec'; g.fillRect(0,0,W,H);
+    g.fillStyle = v('--card') || '#fff';
+    const pad = 72, cw = W - pad*2;
+    if (g.roundRect){ g.beginPath(); g.roundRect(pad, 180, cw, 900, 40); g.fill(); }
+    else g.fillRect(pad, 180, cw, 900);
+
+    g.fillStyle = v('--accent') || '#c47a5a';
+    g.font = font(30, 500);
+    g.fillText('这一周', pad + 56, 300);
+
+    g.fillStyle = v('--text') || '#222';
+    g.font = font(190, 500);
+    g.fillText(String(r.done), pad + 56, 480);
+    g.font = font(38);
+    g.fillStyle = v('--text-dim') || '#888';
+    g.fillText('件计划完成', pad + 56 + g.measureText(String(r.done)).width + 210, 480);
+
+    g.font = font(34);
+    g.fillText(`${r.from}  —  ${r.to}`, pad + 56, 560);
+
+    // 七日方块
+    const bw = 96, gap = 24, y = 660;
+    for (let i = 0; i < 7; i++){
+      const n = this.planDoneOn(r.days[i]);
+      g.fillStyle = n ? (v('--accent') || '#c47a5a') : (v('--line') || '#e5e5e5');
+      g.globalAlpha = n ? Math.min(1, 0.35 + n * 0.18) : 1;
+      const x = pad + 56 + i * (bw + gap);
+      if (g.roundRect){ g.beginPath(); g.roundRect(x, y, bw, bw, 26); g.fill(); }
+      else g.fillRect(x, y, bw, bw);
+      g.globalAlpha = 1;
+      g.fillStyle = v('--text-dim') || '#888';
+      g.font = font(28);
+      g.fillText('一二三四五六日'[i], x + bw/2 - 14, y + bw + 48);
+    }
+
+    g.fillStyle = v('--text') || '#222';
+    g.font = font(40, 500);
+    g.fillText(`推进客户 ${r.clients} 个 · 解决问题 ${r.issues} 个`, pad + 56, 880);
+    g.font = font(46, 500);
+    g.fillText(`连续记录 ${r.streak} 天`, pad + 56, 950);
+
+    g.fillStyle = v('--text-dim') || '#999';
+    g.font = font(26);
+    g.fillText('造梦工作台', pad + 56, 1010);
+    g.font = font(22);
+    g.fillText('由 不一书个人工作台生成器 生成', pad + 56, 1046);
+
+    // 导出。iOS 上 download 属性时常无效，所以失败就退回新窗口打开让用户长按保存
+    cv.toBlob(b => {
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = url; a.download = `这一周-${r.to}.png`;
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        UI.toast('图卡已保存到下载目录');
+      }, 800);
+    }, 'image/png');
+  }
+};
+/* ==== 功能：周复盘 END ==== */
+
+
+/* ==== 功能：今日计划 START ====
+   固定行程是长期模板（plan_template），勾选状态按天存（plan_tdone），
+   所以第二天打开自动是未勾选的新一天；临时待办用按天数组（plan_todos:日期）。 */
+const Plan = {
+  tpl(){ return Store.list('plan_template', (a,b) => (a.time || '99:99') < (b.time || '99:99') ? -1 : 1); },
+  tdone(){ return Store.getDaily('plan_tdone', []); },
+  todos(){ return Store.listDaily('plan_todos'); },
+
+  render(){
+    const doneIds = this.tdone();
+    const tpl = this.tpl();
+    document.getElementById('planTplList').innerHTML = tpl.length
+      ? tpl.map(x => {
+          const done = doneIds.includes(x.id);
+          return `<div class="item ${done ? 'done' : ''}">
+            <button class="box" onclick="Plan.toggleTpl('${x.id}')">${done ? '✓' : ''}</button>
+            <span class="meta" style="width:44px;flex-shrink:0">${Util.esc(x.time || '')}</span>
+            <span class="grow">${Util.esc(x.text)}</span>
+            <button class="del" onclick="Plan.delTpl('${x.id}')">✕</button>
+          </div>`;
+        }).join('')
+      : '<div class="empty">还没有固定行程，在下面加一条</div>';
+
+    const todos = this.todos();
+    document.getElementById('planTodoList').innerHTML = todos.length
+      ? todos.map(x => `<div class="item ${x.done ? 'done' : ''}">
+          <button class="box" onclick="Plan.toggleTodo('${x.id}')">${x.done ? '✓' : ''}</button>
+          <span class="grow">${Util.esc(x.text)}</span>
+          <button class="del" onclick="Plan.delTodo('${x.id}')">✕</button>
+        </div>`).join('')
+      : '<div class="empty">今天没有临时待办</div>';
+  },
+
+  toggleTpl(id){
+    const d = this.tdone();
+    Store.setDaily('plan_tdone', d.includes(id) ? d.filter(x => x !== id) : [...d, id]);
+    this.render();
+  },
+  addTpl(){
+    const t = document.getElementById('planTplText');
+    const text = t.value.trim();
+    if (!text) return UI.toast('先写行程内容');
+    Store.upsert('plan_template', { time: document.getElementById('planTplTime').value, text });
+    t.value = '';
+    this.render();
+  },
+  delTpl(id){
+    Store.softDelete('plan_template', id);
+    Store.setDaily('plan_tdone', this.tdone().filter(x => x !== id));
+    this.render();
+  },
+  addTodo(){
+    const t = document.getElementById('planTodoText');
+    const text = t.value.trim();
+    if (!text) return;
+    Store.upsertDaily('plan_todos', { text, done: false });
+    t.value = '';
+    this.render();
+  },
+  toggleTodo(id){
+    const it = this.todos().find(x => x.id === id);
+    if (it) Store.upsertDaily('plan_todos', { ...it, done: !it.done });
+    this.render();
+  },
+  delTodo(id){
+    Store.softDelete('plan_todos:' + Util.today(), id);
+    this.render();
+  }
+};
+/* ==== 功能：今日计划 END ==== */
+
+
+/* ==== 功能：在谈客户 START ====
+   clients 数组：{name, stage(初聊/量房/方案/效果/报价/待签), next(下一步), last(上次跟进日), created}
+   超过 3 天没跟进自动标红，按没跟进天数从多到少排。 */
+const Clients = {
+  STAGES: ['初聊', '量房', '方案', '效果', '报价', '待签'],
+  list(){ return Store.list('clients'); },
+
+  render(){
+    const arr = this.list().slice()
+      .sort((a,b) => Util.daysSince(b.last || b.created) - Util.daysSince(a.last || a.created));
+    document.getElementById('clientList').innerHTML = arr.length
+      ? arr.map(c => {
+          const d = Util.daysSince(c.last || c.created);
+          const over = d > 3;
+          return `<div class="item">
+            <span class="grow">
+              <b>${Util.esc(c.name)}</b><br>
+              <span class="meta">下一步：${Util.esc(c.next || '未定')}</span><br>
+              <span class="meta ${over ? 'overdue' : ''}">${over ? '⚠ 已 ' + d + ' 天没跟进' : '上次跟进：' + Util.esc(c.last || c.created || '')}</span>
+            </span>
+            <select onchange="Clients.setStage('${c.id}', this.value)" aria-label="阶段">
+              ${this.STAGES.map(s => `<option ${s === c.stage ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <button class="btn small ghost" onclick="Clients.follow('${c.id}')">跟进</button>
+            <button class="del" onclick="Clients.del('${c.id}')">✕</button>
+          </div>`;
+        }).join('')
+      : '<div class="empty">还没有在谈客户，在上面加一个</div>';
+  },
+
+  add(){
+    const nameEl = document.getElementById('clientName');
+    const name = nameEl.value.trim();
+    if (!name) return UI.toast('先写客户称呼');
+    Store.upsert('clients', {
+      name,
+      stage: document.getElementById('clientStage').value,
+      next: document.getElementById('clientNext').value.trim(),
+      last: Util.today(),
+      created: Util.today()
+    });
+    nameEl.value = '';
+    document.getElementById('clientNext').value = '';
+    this.render();
+  },
+  setStage(id, stage){
+    const c = this.list().find(x => x.id === id);
+    if (c) Store.upsert('clients', { ...c, stage });
+    this.render();
+  },
+  async follow(id){
+    const c = this.list().find(x => x.id === id);
+    if (!c) return;
+    const nx = await UI.inputDlg('下一步动作（留空 = 保持不变）', c.next || '');
+    if (nx === null) return;
+    Store.upsert('clients', { ...c, last: Util.today(), next: nx.trim() || c.next });
+    UI.toast('已记上：今天跟进过了');
+    this.render();
+  },
+  async del(id){
+    if (!await UI.confirmDlg('删掉这个客户？')) return;
+    Store.softDelete('clients', id);
+    this.render();
+  }
+};
+/* ==== 功能：在谈客户 END ==== */
+
+
+/* ==== 功能：方案进度 START ====
+   designs 数组：{client, style, node(0-3), created}
+   节点固定四步：平面 → 效果图 → 报价 → 待确认，完成度 = (node+1)*25%。 */
+const Designs = {
+  NODES: ['平面', '效果图', '报价', '待确认'],
+  list(){ return Store.list('designs'); },
+  pct(node){ return (node + 1) * 25; },
+
+  render(){
+    const arr = this.list();
+    document.getElementById('designList').innerHTML = arr.length
+      ? arr.map(x => `<div class="item" style="display:block">
+          <div class="row" style="justify-content:space-between">
+            <span><b>${Util.esc(x.client)}</b> <span class="meta">${Util.esc(x.style || '')}</span></span>
+            <span class="num" style="font-weight:600">${this.pct(x.node)}%</span>
+          </div>
+          <div class="bar"><i style="width:${this.pct(x.node)}%"></i></div>
+          <div class="steps">${this.NODES.map((n,i) => `<span class="step ${i <= x.node ? 'done' : ''}">${n}</span>`).join('')}</div>
+          <div class="row" style="margin-top:10px">
+            ${x.node < 3
+              ? `<button class="btn small" onclick="Designs.advance('${x.id}')">推进到「${this.NODES[x.node + 1]}」</button>`
+              : '<span class="meta">已到待确认，等客户点头</span>'}
+            <button class="btn small ghost" onclick="Designs.del('${x.id}')">删除</button>
+          </div>
+        </div>`).join('')
+      : '<div class="empty">还没有在做的方案</div>';
+  },
+
+  add(){
+    const c = document.getElementById('designClient');
+    const client = c.value.trim();
+    if (!client) return UI.toast('先写客户称呼');
+    Store.upsert('designs', {
+      client,
+      style: document.getElementById('designStyle').value.trim(),
+      node: 0,
+      created: Util.today()
+    });
+    c.value = '';
+    document.getElementById('designStyle').value = '';
+    this.render();
+  },
+  advance(id){
+    const x = this.list().find(v => v.id === id);
+    if (x && x.node < 3) Store.upsert('designs', { ...x, node: x.node + 1 });
+    this.render();
+  },
+  async del(id){
+    if (!await UI.confirmDlg('删掉这个方案进度？')) return;
+    Store.softDelete('designs', id);
+    this.render();
+  }
+};
+/* ==== 功能：方案进度 END ==== */
+
+
+/* ==== 功能：工地动态 START ====
+   sites 数组：{name, stage(当前工序), created}
+   待处理事项单独一张表 site_tasks：{siteId, text, done}，按条合并、互不覆盖。 */
+const Sites = {
+  list(){ return Store.list('sites'); },
+  tasks(siteId){ return Store.list('site_tasks').filter(t => t.siteId === siteId); },
+
+  render(){
+    const arr = this.list();
+    document.getElementById('siteList').innerHTML = arr.length
+      ? arr.map(s => {
+          const tasks = this.tasks(s.id);
+          return `<div class="card wide">
+            <h2>🏗️ ${Util.esc(s.name)}</h2>
+            <div class="row">
+              <span class="meta" style="flex-shrink:0">当前工序</span>
+              <input type="text" id="stage_${s.id}" value="${Util.esc(s.stage || '')}" placeholder="如：水电验收">
+              <button class="btn small" onclick="Sites.saveStage('${s.id}')">保存</button>
+            </div>
+            <div style="margin-top:10px">
+              ${tasks.length ? tasks.map(t => `<div class="item ${t.done ? 'done' : ''}">
+                <button class="box" onclick="Sites.toggleTask('${t.id}')">${t.done ? '✓' : ''}</button>
+                <span class="grow">${Util.esc(t.text)}</span>
+                <button class="del" onclick="Sites.delTask('${t.id}')">✕</button>
+              </div>`).join('') : '<div class="empty">今天没有待处理事项</div>'}
+            </div>
+            <div class="row" style="margin-top:10px">
+              <input type="text" id="task_${s.id}" placeholder="加一件今天要处理的事">
+              <button class="btn small" onclick="Sites.addTask('${s.id}')">添加</button>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn small ghost" onclick="Sites.del('${s.id}')">删除工地</button>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div class="empty" style="padding:26px 0">还没有工地，在上面新建一个</div>';
+  },
+
+  add(){
+    const n = document.getElementById('siteName');
+    const name = n.value.trim();
+    if (!name) return UI.toast('先写工地名称');
+    Store.upsert('sites', {
+      name,
+      stage: document.getElementById('siteStage').value.trim(),
+      created: Util.today()
+    });
+    n.value = '';
+    document.getElementById('siteStage').value = '';
+    this.render();
+  },
+  saveStage(id){
+    const s = this.list().find(x => x.id === id);
+    if (!s) return;
+    Store.upsert('sites', { ...s, stage: document.getElementById('stage_' + id).value.trim() });
+    UI.toast('工序已更新');
+    this.render();
+  },
+  addTask(siteId){
+    const el = document.getElementById('task_' + siteId);
+    const text = el.value.trim();
+    if (!text) return;
+    Store.upsert('site_tasks', { siteId, text, done: false });
+    this.render();
+  },
+  toggleTask(id){
+    const t = Store.list('site_tasks').find(x => x.id === id);
+    if (t) Store.upsert('site_tasks', { ...t, done: !t.done });
+    this.render();
+  },
+  delTask(id){
+    Store.softDelete('site_tasks', id);
+    this.render();
+  },
+  async del(id){
+    if (!await UI.confirmDlg('删掉这个工地和它的待处理事项？')) return;
+    this.tasks(id).forEach(t => Store.softDelete('site_tasks', t.id));
+    Store.softDelete('sites', id);
+    this.render();
+  }
+};
+/* ==== 功能：工地动态 END ==== */
+
+
+/* ==== 功能：问题追踪 START ====
+   issues 数组：{who, text, date(记下日期), resolved, resolvedAt}
+   未解决按记下日期从早到晚（挂得最久的在最上面），已解决保留记录供周复盘统计。 */
+const Issues = {
+  list(){ return Store.list('issues'); },
+
+  render(){
+    const arr = this.list();
+    const open = arr.filter(i => !i.resolved).sort((a,b) => (a.date < b.date ? -1 : 1));
+    const done = arr.filter(i => i.resolved).sort((a,b) => (a.resolvedAt < b.resolvedAt ? 1 : -1));
+    document.getElementById('issueOpenList').innerHTML = open.length
+      ? open.map(i => `<div class="item">
+          <span class="grow"><span class="chip">${Util.esc(i.who || '未分类')}</span> ${Util.esc(i.text)}<br>
+          <span class="meta overdue">挂了 ${Util.daysSince(i.date)} 天 · ${Util.esc(i.date)} 记下</span></span>
+          <button class="btn small" onclick="Issues.resolve('${i.id}')">解决</button>
+          <button class="del" onclick="Issues.del('${i.id}')">✕</button>
+        </div>`).join('')
+      : '<div class="empty">没有悬着的问题，难得清净</div>';
+    document.getElementById('issueDoneList').innerHTML = done.length
+      ? done.map(i => `<div class="item done">
+          <span class="grow"><span class="chip">${Util.esc(i.who || '未分类')}</span> ${Util.esc(i.text)}<br>
+          <span class="meta">${Util.esc(i.resolvedAt || '')} 解决</span></span>
+          <button class="btn small ghost" onclick="Issues.reopen('${i.id}')">还原</button>
+        </div>`).join('')
+      : '<div class="empty">还没有解决记录</div>';
+  },
+
+  add(){
+    const w = document.getElementById('issueWho');
+    const t = document.getElementById('issueText');
+    const text = t.value.trim();
+    if (!text) return UI.toast('先写问题内容');
+    Store.upsert('issues', {
+      who: w.value.trim(), text,
+      date: Util.today(), resolved: false, resolvedAt: null
+    });
+    w.value = '';
+    t.value = '';
+    this.render();
+  },
+  resolve(id){
+    const i = this.list().find(x => x.id === id);
+    if (i) Store.upsert('issues', { ...i, resolved: true, resolvedAt: Util.today() });
+    this.render();
+  },
+  reopen(id){
+    const i = this.list().find(x => x.id === id);
+    if (i) Store.upsert('issues', { ...i, resolved: false, resolvedAt: null });
+    this.render();
+  },
+  del(id){
+    Store.softDelete('issues', id);
+    this.render();
+  },
+  async clearDone(){
+    const done = this.list().filter(i => i.resolved);
+    if (!done.length) return;
+    if (!await UI.confirmDlg('清理 ' + done.length + ' 条已解决的问题？')) return;
+    done.forEach(i => Store.softDelete('issues', i.id));
+    this.render();
+  }
+};
+/* ==== 功能：问题追踪 END ==== */
+
+
+/* ==== 功能：抖音排期 START ====
+   douyin_plan 数组：{col(栏目), title, status(待拍/待剪/待发/已发), created}
+   douyin_ideas 数组：{text}，闪过的选题先记下来，别让它跑了。 */
+const Douyin = {
+  STATUS: ['待拍', '待剪', '待发', '已发'],
+  plans(){ return Store.list('douyin_plan'); },
+  ideas(){ return Store.list('douyin_ideas'); },
+
+  render(){
+    const plans = this.plans();
+    document.getElementById('douyinList').innerHTML = plans.length
+      ? plans.map(p => `<div class="item">
+          <span class="grow"><span class="chip">${Util.esc(p.col || '栏目')}</span> ${Util.esc(p.title)}</span>
+          <select onchange="Douyin.setStatus('${p.id}', this.value)" aria-label="状态">
+            ${this.STATUS.map(s => `<option ${s === p.status ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <button class="del" onclick="Douyin.delPlan('${p.id}')">✕</button>
+        </div>`).join('')
+      : '<div class="empty">本周排期还空着</div>';
+
+    const ideas = this.ideas();
+    document.getElementById('ideaList').innerHTML = ideas.length
+      ? ideas.map(i => `<div class="item">
+          <span class="grow">${Util.esc(i.text)}</span>
+          <button class="del" onclick="Douyin.delIdea('${i.id}')">✕</button>
+        </div>`).join('')
+      : '<div class="empty">灵感池是空的，闪过念头就记一条</div>';
+  },
+
+  addPlan(){
+    const t = document.getElementById('douyinTitle');
+    const title = t.value.trim();
+    if (!title) return UI.toast('先写标题或选题');
+    Store.upsert('douyin_plan', {
+      col: document.getElementById('douyinCol').value.trim(),
+      title, status: '待拍', created: Util.today()
+    });
+    t.value = '';
+    document.getElementById('douyinCol').value = '';
+    this.render();
+  },
+  setStatus(id, status){
+    const p = this.plans().find(x => x.id === id);
+    if (p) Store.upsert('douyin_plan', { ...p, status });
+    this.render();
+  },
+  delPlan(id){
+    Store.softDelete('douyin_plan', id);
+    this.render();
+  },
+  addIdea(){
+    const t = document.getElementById('ideaText');
+    const text = t.value.trim();
+    if (!text) return;
+    Store.upsert('douyin_ideas', { text });
+    t.value = '';
+    this.render();
+  },
+  delIdea(id){
+    Store.softDelete('douyin_ideas', id);
+    this.render();
+  }
+};
+/* ==== 功能：抖音排期 END ==== */
+
+
+/* ==== 主题 START ====（设置页「外观」卡用）
+   模式存 Store 配置 theme_mode：auto / dark / light。
+   选了 dark / light 就给 <html> 挂 data-theme 并写一份 cookie，
+   让下次打开在首帧绘制前就生效（见 <head> 里的预载脚本）。 */
+const Theme = {
+  mode(){ return Store.get('theme_mode', 'auto'); },
+  apply(mode){
+    const de = document.documentElement;
+    if (mode === 'dark' || mode === 'light') {
+      de.setAttribute('data-theme', mode);
+      document.cookie = 'bys_theme=' + mode + ';path=/;max-age=31536000';
+    } else {
+      de.removeAttribute('data-theme');
+      document.cookie = 'bys_theme=;path=/;max-age=0';
+    }
+  },
+  init(){ this.apply(this.mode()); },
+  set(mode){
+    Store.set('theme_mode', mode);
+    this.apply(mode);
+    this.syncUI();
+  },
+  syncUI(){
+    const seg = document.getElementById('themeSeg');
+    if (!seg) return;
+    const m = this.mode();
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  }
+};
+/* ==== 主题 END ==== */
+
+
+/* ==== 功能：口令锁 START ====
+   口令只存哈希、走 Secret 命名空间：不进备份、不参与同步。
+   这是防熟人随手翻的弱保护，不是加密，别拿它当保险箱。 */
+const Lock = {
+  hash(pin){
+    let h = 0;
+    const s = 'zaomeng:' + pin;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return 'h' + (h >>> 0).toString(36);
+  },
+  pin(){ return Store.getSecret('lockPin') || ''; },
+  enabled(){ return !!this.pin(); },
+
+  init(){
+    if (this.enabled()) document.getElementById('lockScreen')?.classList.add('on');
+  },
+  tryUnlock(){
+    const v = document.getElementById('lockPinInput').value;
+    if (this.hash(v) === this.pin()) {
+      document.getElementById('lockScreen').classList.remove('on');
+      document.getElementById('lockPinInput').value = '';
+    } else {
+      document.getElementById('lockHint').textContent = '口令不对，再试一次';
+    }
+  },
+  syncUI(){
+    const box = document.getElementById('lockBody');
+    if (!box) return;
+    if (this.enabled()) {
+      box.innerHTML = `
+        <p class="hint" style="margin-top:0">口令锁已开启，打开工作台要先输口令。</p>
+        <div class="row">
+          <input type="password" inputmode="numeric" id="lockCur" placeholder="当前口令">
+          <input type="password" inputmode="numeric" id="lockNew" placeholder="新口令（改口令才填）">
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" onclick="Lock.change()">改口令</button>
+          <button class="btn ghost" onclick="Lock.disable()">关闭口令锁</button>
+        </div>`;
+    } else {
+      box.innerHTML = `
+        <p class="hint" style="margin-top:0">开启后，打开工作台要先输一遍 4-6 位数字口令。防的是熟人随手翻，不防技术破解。</p>
+        <div class="row">
+          <input type="password" inputmode="numeric" id="lockNew" placeholder="设一个 4-6 位数字口令">
+          <button class="btn" onclick="Lock.enable()">开启</button>
+        </div>`;
+    }
+  },
+  _valid(pin){ return /^\d{4,6}$/.test(pin || ''); },
+  enable(){
+    const pin = document.getElementById('lockNew').value.trim();
+    if (!this._valid(pin)) return UI.toast('口令要是 4-6 位数字');
+    Store.setSecret('lockPin', this.hash(pin));
+    UI.toast('口令锁已开启');
+    this.syncUI();
+  },
+  change(){
+    const cur = document.getElementById('lockCur').value.trim();
+    const nw = document.getElementById('lockNew').value.trim();
+    if (this.hash(cur) !== this.pin()) return UI.toast('当前口令不对');
+    if (!this._valid(nw)) return UI.toast('新口令要是 4-6 位数字');
+    Store.setSecret('lockPin', this.hash(nw));
+    UI.toast('口令已改');
+    this.syncUI();
+  },
+  disable(){
+    const cur = document.getElementById('lockCur').value.trim();
+    if (this.hash(cur) !== this.pin()) return UI.toast('先输当前口令才能关闭');
+    Store.setSecret('lockPin', '');
+    UI.toast('口令锁已关闭');
+    this.syncUI();
+  }
+};
+/* ==== 功能：口令锁 END ==== */
+
+
+App.init();
+</script>
+</body>
+</html>
